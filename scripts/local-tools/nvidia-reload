@@ -1,0 +1,41 @@
+#!/bin/bash
+# Reload the NVIDIA kernel modules to release the dGPU latch seen after an AC unplug
+# under load (P5 / memory 810 MHz / "SW Power Cap" active). See NVIDIA/open-gpu-kernel-modules#1584.
+#
+# This STOPS the graphical session (X uses the NVIDIA GPU), so run it from a TTY
+# (Ctrl+Alt+F3), not from a terminal inside the desktop. Usage: nvidia-reload [--dry-run] [--yes]
+set -u
+DRY=0; YES=0
+for a in "$@"; do case "$a" in --dry-run) DRY=1 ;; --yes) YES=1 ;; esac; done
+[ "$DRY" -eq 1 ] || [ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
+
+STOP="ollama nvidia-powerd lightdm"
+run() { if [ "$DRY" -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
+
+restore() {
+  run systemctl reset-failed nvidia-powerd 2>/dev/null   # avoids start-limit-hit after failed starts
+  run systemctl start nvidia-powerd ollama lightdm
+}
+die() { echo "ERRO: $1"; echo "Nada foi descarregado de forma permanente; restaurando os servicos."; restore; exit 1; }
+
+echo "Isto vai parar: $STOP (a sessao grafica e fechada) e recarregar os modulos da NVIDIA."
+if [ "$YES" -ne 1 ] && [ "$DRY" -ne 1 ]; then
+  read -r -p "Continuar? [digite yes] " ans
+  [ "$ans" = "yes" ] || { echo "Cancelado."; exit 1; }
+fi
+
+run systemctl stop $STOP
+run sleep 3
+
+if [ "$DRY" -ne 1 ]; then
+  holders=$(lsof /dev/nvidia* 2>/dev/null | awk 'NR>1 {print "  " $1 " (pid " $2 ")"}' | sort -u)
+  [ -z "$holders" ] || die "ainda ha processos usando a GPU:
+$holders"
+fi
+
+run modprobe -rv nvidia_uvm nvidia_drm nvidia_modeset nvidia || die "nao foi possivel descarregar os modulos (em uso)"
+run modprobe nvidia_drm nvidia_uvm || die "nao foi possivel carregar os modulos"
+
+restore
+echo "Pronto. Estado (ocioso): $(nvidia-smi --query-gpu=pstate,clocks.mem --format=csv,noheader 2>&1)"
+echo "Teste sob carga: o P-state deve ser P0 e a memoria 5411 MHz."
