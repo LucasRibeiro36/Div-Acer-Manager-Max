@@ -18,7 +18,8 @@ class PowerSourceDetector:
         self.current_source = None
         self.check_interval = 5  # seconds
         self.timer = None
-        
+        self._profile_before_battery = None  # profile to restore on AC
+
         log.info("PowerSourceDetector initialized")
         
         self.possible_power_supply_paths = [
@@ -143,14 +144,19 @@ class PowerSourceDetector:
         available_profiles = self.manager.get_thermal_profile_choices()
 
         if is_plugged_in:
-            # On AC power - no restrictions
+            # On AC power - no restrictions; undo our own battery downgrade
             log.info("Switched to AC power")
+            saved, self._profile_before_battery = self._profile_before_battery, None
+            if saved and saved in available_profiles and current_profile != saved:
+                log.info(f"Restoring {saved} profile after battery power")
+                self.manager.set_thermal_profile(saved)
         else:
             # On battery power - enforce balanced or eco mode
             log.info("Switched to battery power")
 
             if current_profile not in ["balanced", "quiet", "power-saver"]:
                 # If current profile isn't battery-friendly, switch to balanced
+                self._profile_before_battery = current_profile
                 if "balanced" in available_profiles:
                     log.info("Auto-switching to balanced mode for battery power")
                     self.manager.set_thermal_profile("balanced")
