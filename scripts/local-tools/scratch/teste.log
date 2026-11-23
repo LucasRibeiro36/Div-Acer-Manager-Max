@@ -1,0 +1,7 @@
+rmmod nvidia_drm
+rmmod nvidia_modeset
+rmmod nvidia
+lsof: WARNING: can't stat() fuse.gvfsd-fuse file system /run/user/1000/gvfs
+      Output information may be incomplete.
+lsof: status error on /dev/dri/card0: No such file or directory
+lsof: status error on /dev/dri/renderD129: No such file or directory
