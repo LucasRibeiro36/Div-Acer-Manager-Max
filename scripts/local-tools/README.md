@@ -89,7 +89,3 @@ To check that a daemon change took effect, look at the service log, for example 
 ### Status
 
 When this README was written, `--dry-run` and `--build-only` had been run and passed. The install step and the automatic rollback had not been exercised.
-
-## scratch/
-
-`teste.sh` and `teste.log` are the manual run (stop services, `lsof`, `modprobe -rv`) that `nvidia-reload` automates, and its output. They are kept as a record and are not meant to be run as-is.
